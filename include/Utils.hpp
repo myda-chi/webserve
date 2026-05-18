@@ -5,6 +5,8 @@
 # include <vector>
 # include <sstream>
 # include <algorithm>
+# include <fstream>
+#include  <dirent.h>  
 
 namespace Utils {
 	// String manipulation
