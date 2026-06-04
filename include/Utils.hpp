@@ -1,7 +1,7 @@
 #ifndef UTILS_HPP
 # define UTILS_HPP
 
-# include <string>
+# include <cstring>
 # include <vector>
 # include <sstream>
 # include <algorithm>

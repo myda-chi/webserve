@@ -36,38 +36,61 @@ namespace Utils {
 	}
 
 	std::vector<std::string> split(const std::string& str, char delimiter) {
-		// TODO: Implementation
-		(void)str;
-		(void)delimiter;
-		return std::vector<std::string>();
+		std::vector<std::string> tokens;
+		std::istringstream ss(str);
+		std::string token;
+
+		while(std::getline(ss, token, delimiter))
+		{
+			if(!token.empty())
+				tokens.push_back(token);
+		}
+		return tokens;
 	}
 
 	std::vector<std::string> split(const std::string& str, const std::string& delimiter) {
-		// TODO: Implementation
-		(void)str;
-		(void)delimiter;
-		return std::vector<std::string>();
+		std::vector<std::string> tokens;
+		size_t start = 0;
+		size_t end = str.find(delimiter);
+
+		while(end != std::string::npos)
+		{
+			std::string token = str.substr(start, end - start);
+			if(!token.empty())
+				tokens.push_back(token);
+			start = end + delimiter.size();
+			end = str.find(delimiter, start);
+		}
+
+		std::string last = str.substr(start);
+		if(!last.empty())
+			tokens.push_back(last);
+			
+		return tokens;
 	}
 
 	std::string join(const std::vector<std::string>& vec, const std::string& delimiter) {
-		// TODO: Implementation
-		(void)vec;
-		(void)delimiter;
-		return "";
+		std::string result;
+
+		for(size_t i = 0; i < vec.size(); ++i)
+		{
+			result += vec[i];
+			if(i + 1 < vec.size())
+				result += delimiter;
+		}
+		return result;
 	}
 
 	bool startsWith(const std::string& str, const std::string& prefix) {
-		// TODO: Implementation
-		(void)str;
-		(void)prefix;
-		return false;
+		if(prefix.size() > str.size())
+			return false;
+		return str.compare(0, prefix.size(), prefix) == 0;
 	}
 
 	bool endsWith(const std::string& str, const std::string& suffix) {
-		// TODO: Implementation
-		(void)str;
-		(void)suffix;
-		return false;
+		if(suffix.size() > str.size())
+			return false;
+		return str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
 	}
 
 	// Type conversion
@@ -283,9 +306,31 @@ namespace Utils {
 	// MIME types
 	std::string getMimeType(const std::string& extension) 
 	{
-		// TODO: Implementation
-		(void)extension;
-		return "";
+		if (extension == "html" || extension == "htm")
+			return "text/html";
+		if (extension == "css")
+			return "text/css";
+		if (extension == "js")
+			return "application/javascript";
+		if (extension == "json")
+			return "application/json";
+		if (extension == "txt")
+			return "text/plain";
+		if (extension == "png")
+			return "image/png";
+		if (extension == "jpg" || extension == "jpeg")
+			return "image/jpeg";
+		if (extension == "gif")
+			return "image/gif";
+		if (extension == "ico")
+			return "image/x-icon";
+		if (extension == "pdf")
+			return "application/pdf";
+		if (extension == "mp4")
+			return "video/mp4";
+		if (extension == "mp3")
+			return "audio/mpeg";
+		return "application/octet-stream"; // unknown → raw binary
 	}
 
 	std::string getDefaultMimeType() 
@@ -296,15 +341,16 @@ namespace Utils {
 	// Date/Time
 	std::string getHttpDate() 
 	{
-		// TODO: Implementation
-		return "";
+		return getHttpDate(std::time(NULL));
 	}
 
 	std::string getHttpDate(time_t time) 
 	{
-		// TODO: Implementation
-		(void)time;
-		return "";
+		struct tm* gmt = std::gmtime(&time);
+		char buf[64];
+		// HTTP date format: "Mon, 04 Jun 2026 10:00:00 GMT"
+		std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+		return std::string(buf);
 	}
 
 	// HTTP utilities
@@ -328,44 +374,98 @@ namespace Utils {
 
 	bool isValidMethod(const std::string& method) 
 	{
-		// TODO: Implementation
-		(void)method;
-		return false;
+		return method == "GET"    ||
+           method == "POST"   ||
+           method == "DELETE" ||
+           method == "HEAD"   ||
+           method == "PUT";
 	}
 
 	bool isValidStatusCode(int code) 
 	{
-		// TODO: Implementation
-		(void)code;
-		return false;
+		return (code >= 100 && code <= 599);
 	}
 
 	// Encoding
 	std::string base64Encode(const std::string& input) 
 	{
-		// TODO: Implementation
-		(void)input;
-		return "";
+		const std::string chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+		std::string result;
+		int val = 0;
+		int valb = -6;
+
+		for (size_t i = 0; i < input.size(); ++i) {
+			val = (val << 8) + static_cast<unsigned char>(input[i]);
+			valb += 8;
+			while (valb >= 0) {
+				result.push_back(chars[(val >> valb) & 0x3F]);
+				valb -= 6;
+			}
+		}
+
+		// add padding '=' if needed
+		if (valb > -6)
+			result.push_back(chars[((val << 8) >> (valb + 8)) & 0x3F]);
+		while (result.size() % 4)
+			result.push_back('=');
+
+		return result;
 	}
 
 	std::string base64Decode(const std::string& input) 
 	{
-		// TODO: Implementation
-		(void)input;
-		return "";
+		const std::string chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+		std::string result;
+		std::vector<int> T(256, -1);
+
+		// build lookup table
+		for (int i = 0; i < 64; ++i)
+			T[static_cast<unsigned char>(chars[i])] = i;
+
+		int val = 0;
+		int valb = -8;
+
+		for (size_t i = 0; i < input.size(); ++i) {
+			unsigned char c = static_cast<unsigned char>(input[i]);
+			if (T[c] == -1)
+				break; // invalid or padding character
+			val = (val << 6) + T[c];
+			valb += 6;
+			if (valb >= 0) {
+				result.push_back(static_cast<char>((val >> valb) & 0xFF));
+				valb -= 8;
+			}
+		}
+		return result;
 	}
 
 	std::string hexEncode(const std::string& input) 
 	{
-		// TODO: Implementation
-		(void)input;
-		return "";
+		const char* hexChars = "0123456789abcdef";
+		std::string result;
+
+		for (size_t i = 0; i < input.size(); ++i) {
+			unsigned char c = static_cast<unsigned char>(input[i]);
+			result.push_back(hexChars[c >> 4]);   // high 4 bits
+			result.push_back(hexChars[c & 0x0F]); // low 4 bits
+		}
+		return result;
 	}
 
 	std::string hexDecode(const std::string& input) 
 	{
-		// TODO: Implementation
-		(void)input;
-		return "";
+		std::string result;
+
+		for (size_t i = 0; i + 1 < input.size(); i += 2) {
+			// convert each pair of hex chars back to a byte
+			std::string byte = input.substr(i, 2);
+			char c = static_cast<char>(std::strtol(byte.c_str(), NULL, 16));
+			result.push_back(c);
+		}
+		return result;
 	}
 }
