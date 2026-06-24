@@ -19,7 +19,7 @@ A comprehensive guide to all the concepts, techniques, and design decisions in t
 11. [CGI (Common Gateway Interface)](#11-cgi-common-gateway-interface)
 12. [Connection Management](#12-connection-management)
 13. [Error Handling Strategy](#13-error-handling-strategy)
-14. [Security Considerations](#14-security-considerations)`
+14. [Security Considerations](#14-security-considerations)
 15. [Design Patterns Used](#15-design-patterns-used)
 16. [End-to-End Request Lifecycle](#16-end-to-end-request-lifecycle)
 17. [Utility Systems](#17-utility-systems)
@@ -28,21 +28,6 @@ A comprehensive guide to all the concepts, techniques, and design decisions in t
 
 ## 1. Project Overview
 
-
-```
-raw bytes
-    │
-    ▼
-┌─────────────────┐
-│ 1. Find \r\n\r\n │  ← Headers/body boundary
-└────────┬────────┘
-         │
-    ┌────▼────┐
-    │ headers  │  body_text
-    │  text    │
-    └────┬─────┘
-         │
-    ┌────▼─────────┐
 **Webserv** is an HTTP/1.1 web server written in C++98. It handles client requests asynchronously using non-blocking sockets and the `select()` system call for I/O multiplexing. It supports static file serving, CGI script execution, file uploads, and a NGINX-like configuration format.
 
 ### Key Constraints
