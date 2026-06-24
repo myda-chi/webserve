@@ -255,23 +255,31 @@ namespace Utils {
     return encoded.str();
 	}
 
-	std::string normalizePath(const std::string& path) 
-	{
-		std::vector<std::string> parts;
-    	std::istringstream ss(path);
-    	std::string token;
+std::string normalizePath(const std::string& path) 
+{
+	std::vector<std::string> parts;
+	std::istringstream ss(path);
+	std::string token;
 
-		while (std::getline(ss, token, '/')) {
-			if (token == "" || token == ".")
-				continue;          // skip empty parts and "current dir" dots
-			else if (token == "..") {
-				if (!parts.empty())
-					parts.pop_back(); // go up one level
-			} else {
-				parts.push_back(token);
-			}
+	while (std::getline(ss, token, '/')) {
+		if (token == "" || token == ".")
+			continue;          // skip empty parts and "current dir" dots
+		else if (token == "..") {
+			if (!parts.empty())
+				parts.pop_back(); // go up one level
+		} else {
+			parts.push_back(token);
 		}
 	}
+
+	std::string result = "/";
+    for(size_t i = 0; i < parts.size(); ++i) {
+        result += parts[i];
+        if (i + 1 < parts.size())
+            result += "/";
+    }
+    return result;
+}
 
 	std::string joinPath(const std::string& path1, const std::string& path2) 
 	{
