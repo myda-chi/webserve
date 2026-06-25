@@ -104,6 +104,58 @@
             font-weight: bold;
             letter-spacing: 0.5px;
         }
+        .panel {
+            margin-top: 30px;
+            background: rgba(255,255,255,0.15);
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .login-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .login-form input {
+            flex: 1 1 180px;
+            min-width: 0;
+            padding: 9px 12px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        button {
+            padding: 9px 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        button.secondary {
+            background: rgba(255,255,255,0.22);
+        }
+        .upload-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .upload-form input {
+            flex: 1 1 220px;
+            min-width: 0;
+            color: #333;
+            background: white;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        .logout-form {
+            margin-top: 14px;
+        }
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -116,8 +168,8 @@
             This is a custom-built HTTP/1.1 server written in C++98 as part of the 42 curriculum.
         </p>
         <div class="links">
-            <a href="/uploads">📁 View Uploads</a>
             <a href="/cgi-bin">⚙️ CGI Scripts</a>
+            <a href="/my-uploads">🗂️ My Uploads</a>
         </div>
 
         <div class="panel">
@@ -125,7 +177,22 @@
             <form action="/uploads/" method="POST" enctype="multipart/form-data">
                 <input type="file" name="file" style="margin: 10px 0; color: #333;"><br>
                 <button type="submit" class="upload-btn">Upload</button>
+
+        <div class="panel">
+            <h3 id="auth-title">🔐 Login</h3>
+            <form id="login-form" class="login-form" action="/login" method="POST">
+                <input type="text" name="username" placeholder="username" maxlength="32" required>
+                <button type="submit">Login</button>
             </form>
+            <div id="logged-in-box" class="hidden">
+                <form class="upload-form" action="/uploads/" method="POST" enctype="multipart/form-data">
+                    <input type="file" name="file" required>
+                    <button type="submit">Upload</button>
+                </form>
+                <form class="logout-form" action="/logout" method="POST">
+                    <button class="secondary" type="submit">Logout</button>
+                </form>
+            </div>
         </div>
 
         <div class="panel">
@@ -181,6 +248,38 @@
         });
 
         loadFileOptions();
+    </script>
+    <script>
+        (function () {
+            var title = document.getElementById('auth-title');
+            var loginForm = document.getElementById('login-form');
+            var loggedInBox = document.getElementById('logged-in-box');
+
+            function showLoggedOut() {
+                title.textContent = '🔐 Login';
+                loginForm.classList.remove('hidden');
+                loggedInBox.classList.add('hidden');
+            }
+
+            function showLoggedIn(username) {
+                title.textContent = 'Welcome ' + username + '!';
+                loginForm.classList.add('hidden');
+                loggedInBox.classList.remove('hidden');
+            }
+
+            fetch('/session')
+                .then(function (response) { return response.text(); })
+                .then(function (text) {
+                    var prefix = 'Logged in as ';
+                    if (text.indexOf(prefix) !== 0) {
+                        showLoggedOut();
+                        return;
+                    }
+                    var username = text.slice(prefix.length).split('\n')[0];
+                    showLoggedIn(username);
+                })
+                .catch(showLoggedOut);
+        }());
     </script>
 </body>
 </html>

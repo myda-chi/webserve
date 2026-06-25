@@ -6,7 +6,7 @@
 #    By: zsalih <zsalih@student.42abudhabi.ae>      +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/11/22 00:00:00 by webserv           #+#    #+#              #
-#    Updated: 2026/06/22 17:14:08 by zsalih           ###   ########.fr        #
+#    Updated: 2026/06/25 09:47:17 by zsalih           ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -36,7 +36,8 @@ SRCS		= $(SRC_DIR)/main.cpp \
 			  $(SRC_DIR)/Logger.cpp \
 			  $(SRC_DIR)/SessionMiddleware.cpp \
 			  $(SRC_DIR)/CookieParser.cpp \
-			  $(SRC_DIR)/SessionManager.cpp
+			  $(SRC_DIR)/SessionManager.cpp \
+			  $(SRC_DIR)/FileRegistry.cpp
 
 # Object files
 OBJS		= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
@@ -55,7 +56,8 @@ HEADERS		= $(INC_DIR)/Server.hpp \
 			  $(INC_DIR)/Logger.hpp \
 			  $(INC_DIR)/SessionMiddleware.hpp \
 			  $(INC_DIR)/CookieParser.hpp \
-			  $(INC_DIR)/SessionManager.hpp
+			  $(INC_DIR)/SessionManager.hpp \
+			  $(INC_DIR)/FileRegistry.hpp 
 
 # Colors
 GREEN		= \033[0;32m

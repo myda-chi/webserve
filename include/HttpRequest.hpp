@@ -4,6 +4,8 @@
 # include <string>
 # include <map>
 # include <vector>
+# include "SessionManager.hpp"
+# include <iostream>
 
 class HttpRequest {
 private:
