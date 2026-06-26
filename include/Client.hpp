@@ -7,6 +7,7 @@
 # include "HttpResponse.hpp"
 # include "ServerConfig.hpp"
 # include "CgiHandler.hpp"
+# include "iostream"
 
 class Client {
 private:
