@@ -10,14 +10,15 @@
             max-width: 800px;
             margin: 50px auto;
             padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: white;
         }
         .container {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
             padding: 40px;
             border-radius: 10px;
             backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         h1 {
             font-size: 3em;
@@ -44,6 +45,95 @@
             background: rgba(255, 255, 255, 0.3);
             transform: translateY(-2px);
         }
+        .panel {
+            margin-top: 30px;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .panel h3 {
+            margin-top: 0;
+        }
+        button.upload-btn {
+            padding: 8px 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        #fileList {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0 0;
+        }
+        #fileList li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.12);
+            padding: 8px 14px;
+            margin-bottom: 6px;
+            border-radius: 5px;
+            font-size: 0.95em;
+        }
+        #fileList li span {
+            word-break: break-all;
+            margin-right: 10px;
+        }
+        .delete-btn {
+            padding: 6px 14px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+        .delete-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .refresh-btn {
+            padding: 6px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .file-status {
+            margin-top: 10px;
+            font-size: 0.9em;
+            min-height: 1.2em;
+            opacity: 0.9;
+        }
+        .file-status.error {
+            color: #ffb3b3;
+        }
+        .file-status.success {
+            color: #b3ffc6;
+        }
+        footer.credits {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.85em;
+            opacity: 0.75;
+        }
+        footer.credits .names {
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
     </style>
 </head>
 <body>
@@ -59,18 +149,120 @@
             <a href="/uploads">📁 View Uploads</a>
             <a href="/cgi-bin">⚙️ CGI Scripts</a>
         </div>
-        <div style="margin-top: 30px; background: rgba(255,255,255,0.15); padding: 20px; border-radius: 8px;">
+
+        <div class="panel">
             <h3>📤 Upload a File</h3>
             <form action="/uploads/" method="POST" enctype="multipart/form-data">
                 <input type="file" name="file" style="margin: 10px 0; color: #333;"><br>
-                <button type="submit" style="padding: 8px 24px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1em;">
-                    Upload
-                </button>
+                <button type="submit" class="upload-btn">Upload</button>
             </form>
         </div>
-        <p style="margin-top: 30px; font-size: 0.9em; opacity: 0.8;">
-            Server: Webserv/1.0 | Protocol: HTTP/1.1
-        </p>
+
+        <div class="panel">
+            <h3>🗑️ Manage Uploaded Files</h3>
+            <p style="font-size: 0.95em; margin: 0 0 5px;">
+                Delete files you no longer need from <code>/uploads</code>.
+            </p>
+            <button class="refresh-btn" id="toggleBtn">Show files</button>
+            <ul id="fileList" style="display: none;"></ul>
+            <div class="file-status" id="fileStatus"></div>
+        </div>
+
+        <footer class="credits">
+            Built for the 42 Webserv project by
+            <span class="names">myda-chi, zsalih, hmensah</span>
+        </footer>
     </div>
+
+    <script>
+        const fileListEl = document.getElementById('fileList');
+        const statusEl = document.getElementById('fileStatus');
+        const toggleBtn = document.getElementById('toggleBtn');
+
+        let isVisible = false;
+
+        function setStatus(message, type) {
+            statusEl.textContent = message || '';
+            statusEl.className = 'file-status' + (type ? ' ' + type : '');
+        }
+        function loadFiles() {
+            setStatus('Loading files…', '');
+            fetch('/uploads/')
+                .then(res => {
+                    if (!res.ok) throw new Error('Could not load file list (status ' + res.status + ')');
+                    return res.text();
+                })
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const links = Array.from(doc.querySelectorAll('a'));
+
+                    const names = links
+                        .map(a => decodeURIComponent(a.getAttribute('href') || ''))
+                        .map(href => href.replace(/^\/?uploads\/?/, ''))
+                        .filter(name => name && name !== '.' && name !== '..');
+
+                    renderFiles(names);
+                    setStatus(names.length ? '' : 'No files in /uploads yet.', '');
+                })
+                .catch(err => {
+                    fileListEl.innerHTML = '';
+                    setStatus(err.message, 'error');
+                });
+        }
+
+        function renderFiles(names) {
+            fileListEl.innerHTML = '';
+            names.forEach(name => {
+                const li = document.createElement('li');
+
+                const label = document.createElement('span');
+                label.textContent = name;
+
+                const btn = document.createElement('button');
+                btn.textContent = 'Delete';
+                btn.className = 'delete-btn';
+                btn.addEventListener('click', () => deleteFile(name, btn));
+
+                li.appendChild(label);
+                li.appendChild(btn);
+                fileListEl.appendChild(li);
+            });
+        }
+
+        function deleteFile(name, btn) {
+            if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
+
+            btn.disabled = true;
+            btn.textContent = 'Deleting…';
+            setStatus('', '');
+
+            fetch('/uploads/' + encodeURIComponent(name), { method: 'DELETE' })
+                .then(res => {
+                    if (!res.ok) throw new Error('Delete failed (status ' + res.status + ')');
+                    setStatus('"' + name + '" was deleted.', 'success');
+                    loadFiles();
+                })
+                .catch(err => {
+                    setStatus(err.message, 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Delete';
+                });
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            isVisible = !isVisible;
+
+            if (isVisible) {
+                fileListEl.style.display = 'block';
+                toggleBtn.textContent = 'Hide files';
+                loadFiles();
+            } else {
+                fileListEl.style.display = 'none';
+                toggleBtn.textContent = 'Show files';
+                setStatus('', '');
+            }
+        });
+    </script>
 </body>
 </html>
