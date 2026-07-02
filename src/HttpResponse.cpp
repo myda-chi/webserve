@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   HttpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: hmensah- <hmensah-@student.42abudhabi.a    +#+  +:+       +#+        */
+/*   By: zsalih <zsalih@student.42abudhabi.ae>      +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/08 22:21:34 by hmensah-          #+#    #+#             */
-/*   Updated: 2026/06/08 22:21:35 by hmensah-         ###   ########.fr       */
+/*   Updated: 2026/06/20 22:18:39 by zsalih           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,7 @@
 #include <ctime>
 
 // Orthodox Canonical Form
-HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _httpVersion("HTTP/1.1") {
+HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _httpVersion("HTTP/1.1"), _setCookie(false), _cookieHeader("") {
 	setDefaultHeaders();
 }
 
@@ -31,6 +31,8 @@ HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
 		_httpVersion = other._httpVersion;
 		_headers = other._headers;
 		_body = other._body;
+		_setCookie = other._setCookie;
+		_cookieHeader = other._cookieHeader;
 	}
 	return *this;
 }
@@ -52,6 +54,12 @@ void HttpResponse::setBody(const std::string& body) {
 	_body = body;
 }
 
+void HttpResponse::setCookieHeader(const std::string& cookie) {
+	_setCookie = true;
+	_cookieHeader = cookie;
+	addHeader("Set-Cookie", cookie);
+}
+
 // Getters
 int HttpResponse::getStatusCode() const {
 	return _statusCode;
@@ -63,6 +71,10 @@ const std::string& HttpResponse::getStatusMessage() const {
 
 const std::string& HttpResponse::getBody() const {
 	return _body;
+}
+
+const std::string& HttpResponse::getCookieHeader() const {
+	return _cookieHeader;
 }
 
 // Response building
@@ -87,6 +99,8 @@ void HttpResponse::clear() {
 	_httpVersion = "HTTP/1.1";
 	_headers.clear();
 	_body.clear();
+	_setCookie = false;
+	_cookieHeader.clear();
 	setDefaultHeaders();
 }
 

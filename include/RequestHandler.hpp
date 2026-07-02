@@ -21,6 +21,10 @@ private:
 	void		handlePost();
 	void		handleDelete();
 	void		handleHead();
+	void 		handleSession();
+	void 		handleLogin();
+	void 		handleLogout();
+	void		handleMyUploads();
 
 	// Helper methods
 	void		serveStaticFile(const std::string& path);

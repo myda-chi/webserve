@@ -59,8 +59,8 @@ namespace {
 }
 
 // Orthodox Canonical Form
-HttpRequest::HttpRequest() : _httpVersion("HTTP/1.1"), _isComplete(false), _isChunked(false), _isValid(true), _errorCode(0), _contentLength(0) {
-}
+HttpRequest::HttpRequest() : _httpVersion("HTTP/1.1"), _isComplete(false), _isChunked(false), _isValid(true), _errorCode(0), _contentLength(0), _session(NULL), _sessionId("") {}
+
 
 HttpRequest::HttpRequest(const HttpRequest& other) {
 	*this = other;
@@ -80,6 +80,8 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& other) {
 		_errorCode = other._errorCode;
 		_contentLength = other._contentLength;
 		_rawRequest = other._rawRequest;
+		_session = other._session;
+		_sessionId = other._sessionId;
 	}
 	return *this;
 }
@@ -184,6 +186,8 @@ void HttpRequest::clear() {
 	_errorCode = 0;
 	_contentLength = 0;
 	_rawRequest.clear();
+	_session = NULL;
+	_sessionId.clear();
 }
 
 // Private parsing helpers
@@ -382,6 +386,23 @@ const std::string& HttpRequest::getBody() const {
 
 const std::string& HttpRequest::getQueryString() const {
 	return _queryString;
+}
+
+Session* HttpRequest::getSession() const {
+	return _session;
+}
+
+const std::string& HttpRequest::getSessionId() const {
+	return _sessionId;
+}
+
+//Setters
+void HttpRequest::setSession(Session* session) {
+	_session = session;
+}
+
+void HttpRequest::setSessionId(const std::string& id) {
+	_sessionId = id;
 }
 
 // Utility methods

@@ -4,6 +4,7 @@
 # include <string>
 # include <map>
 # include <vector>
+# include "SessionManager.hpp"
 # include <iostream>
 
 class HttpRequest {
@@ -20,6 +21,8 @@ private:
 	int									_errorCode;
 	size_t								_contentLength;
 	std::string							_rawRequest;
+	Session*							_session;
+	std::string							_sessionId;
 
 	// Parsing helper methods
 	void		parseRequestLine(const std::string& line);
@@ -51,6 +54,12 @@ public:
 	std::string							getHeader(const std::string& key) const;
 	const std::string&					getBody() const;
 	const std::string&					getQueryString() const;
+	Session*							getSession() const;
+	const std::string&					getSessionId() const;
+
+	// Setters
+	void	setSession(Session* session);
+	void    setSessionId(const std::string& id);
 
 	// Utility methods
 	bool		hasHeader(const std::string& key) const;

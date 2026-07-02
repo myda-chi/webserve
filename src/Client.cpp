@@ -1,5 +1,6 @@
 #include "../include/Client.hpp"
 #include "../include/RequestHandler.hpp"
+#include "../include/SessionMiddleware.hpp"
 #include <unistd.h>
 #include <ctime>
 
@@ -85,6 +86,9 @@ void Client::processRequest() {
 		return;
 	}
 
+	SessionMiddleware sessionMiddleware;
+	sessionMiddleware.processRequest(_request);
+
 	RequestHandler handler(_request, _response, *_serverConfig);
 	CgiHandler* cgi = new CgiHandler(_request, _response);
 	bool handled = false;
@@ -97,6 +101,8 @@ void Client::processRequest() {
 
 	if (!handled)
 		handler.handle();
+
+	sessionMiddleware.processResponse(_request, _response);
 	setKeepAlive(_request.keepAlive());
 	if (_keepAlive)
 		_response.addHeader("Connection", "keep-alive");
@@ -128,6 +134,8 @@ void Client::finishCgi() {
 	_cgi->finish();
 	delete _cgi;
 	_cgi = NULL;
+	SessionMiddleware sessionMiddleware;
+	sessionMiddleware.processResponse(_request, _response);
 	setKeepAlive(_request.keepAlive());
 	if (_keepAlive)
 		_response.addHeader("Connection", "keep-alive");

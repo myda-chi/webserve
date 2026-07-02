@@ -3,6 +3,7 @@
 
 # include <string>
 # include <map>
+# include "CookieParser.hpp"
 
 class HttpResponse {
 	private:
@@ -11,6 +12,8 @@ class HttpResponse {
 	std::string							_httpVersion;
 	std::map<std::string, std::string>	_headers;
 	std::string							_body;
+	bool								_setCookie;
+	std::string							_cookieHeader;
 
 	// Helper methods
 	std::string		getStatusMessage(int code) const;
@@ -29,11 +32,13 @@ public:
 	void		setStatusCode(int code);
 	void		addHeader(const std::string& key, const std::string& value);
 	void		setBody(const std::string& body);
+	void		setCookieHeader(const std::string& cookie);
 
 	// Getters
 	int									getStatusCode() const;
 	const std::string&					getStatusMessage() const;
 	const std::string&					getBody() const;
+	const std::string&					getCookieHeader() const;
 
 	// Response building
 	std::string		build();

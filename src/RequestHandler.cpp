@@ -1,5 +1,6 @@
 #include "../include/RequestHandler.hpp"
 #include "../include/CgiHandler.hpp"
+#include "../include/FileRegistry.hpp"
 
 #include <dirent.h>
 #include <ctime>
@@ -170,6 +171,20 @@ namespace {
 		}
 		return false;
 	}
+	static std::map<std::string, std::string> parseFormBody(const std::string& body) {
+        std::map<std::string, std::string> fields;
+        std::istringstream stream(body);
+        std::string token;
+        while (std::getline(stream, token, '&')) {
+            size_t eq = token.find('=');
+            if (eq == std::string::npos)
+                continue;
+            std::string key   = urlDecode(token.substr(0, eq));
+            std::string value = urlDecode(token.substr(eq + 1));
+            fields[key] = value;
+        }
+        return fields;
+    }
 }
 
 // Orthodox Canonical Form
@@ -194,6 +209,22 @@ RequestHandler::~RequestHandler() {
 
 // Main handler
 void RequestHandler::handle() {
+	if (_request.getPath() == "/session" && _request.getMethod() == "GET") {
+  	    handleSession(); return;
+  	}
+  	if (_request.getPath() == "/login" && _request.getMethod() == "POST") {
+  	    handleLogin(); return;
+  	}
+  	if (_request.getPath() == "/logout" && _request.getMethod() == "POST") {
+  	    handleLogout(); return;
+  	}
+
+	if (_request.getPath() == "/my-uploads" && _request.getMethod() == "GET")
+	{
+	    handleMyUploads();
+	    return;
+	}
+
 	_route = _config.matchRoute(_request.getPath());
 
 	if (_route != NULL && !_route->getRedirect().empty()) {
@@ -313,6 +344,9 @@ void RequestHandler::handleDelete() {
 		handleError(403);
 		return;
 	}
+	Session* session = _request.getSession();
+	if (session != NULL && session->hasKey("username"))
+		FileRegistry::getInstance().unregisterFile(session->getValue("username"), filePath);
 	_response.setStatusCode(204);
 	_response.setBody("");
 }
@@ -320,6 +354,86 @@ void RequestHandler::handleDelete() {
 void RequestHandler::handleHead() {
 	handleGet();
 	_response.setBody("");
+}
+
+void RequestHandler::handleSession() {
+    Session* session = _request.getSession();
+
+    _response.setStatusCode(200);
+    _response.setContentType("text/plain");
+
+    if (session != NULL && session->hasKey("username"))
+        _response.setBody("Logged in as " + session->getValue("username") + "\n");
+    else
+        _response.setBody("Not logged in\n");
+}
+
+void RequestHandler::handleLogin() {
+    std::string contentType = _request.getHeader("content-type");
+    if (contentType.find("application/x-www-form-urlencoded") == std::string::npos) {
+        handleError(415);
+        return;
+    }
+
+    std::map<std::string, std::string> fields = parseFormBody(_request.getBody());
+    std::string username = fields["username"];
+
+    username = trim(username);
+
+    if (username.empty()) {
+        _response.setStatusCode(303);
+        _response.setLocation("/");
+        _response.setContentType("text/html");
+        _response.setBody("<html><body>Redirecting...</body></html>");
+        return;
+    }
+
+    Session* session = _request.getSession();
+    if (session == NULL) {
+        handleError(500);
+        return;
+    }
+
+    session->setData("username", username);
+
+    _response.setStatusCode(303);
+    _response.setLocation("/");
+    _response.setContentType("text/html");
+    _response.setBody("<html><body>Redirecting...</body></html>");
+}
+
+void RequestHandler::handleLogout() {
+    Session* session = _request.getSession();
+    if (session != NULL)
+        session->unsetData("username");
+
+    _response.setStatusCode(303);
+    _response.setLocation("/");
+    _response.setContentType("text/html");
+    _response.setBody("<html><body>Redirecting...</body></html>");
+}
+
+void RequestHandler::handleMyUploads() {
+	Session* session = _request.getSession();
+	if (session == NULL || !session->hasKey("username")) {
+		handleError(403);
+		return;
+	}
+
+	std::string username = session->getValue("username");
+	std::vector<std::string> files = FileRegistry::getInstance().getFiles(username);
+
+	std::ostringstream html;
+	html << "<html><body><h1>My Uploads</h1><ul>";
+	for (size_t i = 0; i < files.size(); ++i) {
+		std::string fileName = baseName(files[i]);
+		html << "<li><a href=\"" << files[i] << "\">" << fileName << "</a></li>";
+	}
+	html << "</ul></body></html>";
+
+	_response.setStatusCode(200);
+	_response.setContentType("text/html");
+	_response.setBody(html.str());
 }
 
 // Private helper methods
@@ -378,6 +492,13 @@ void RequestHandler::handleRedirect(const std::string& location) {
 }
 
 void RequestHandler::handleFileUpload() {
+	Session* session = _request.getSession();
+	if (session == NULL || !session->hasKey("username")) {
+		handleError(401);
+		return;
+	}
+
+	std::string username = session->getValue("username");
 	if (_route == NULL || _route->getUploadPath().empty()) {
 		handleError(403);
 		return;
@@ -412,10 +533,14 @@ void RequestHandler::handleFileUpload() {
 		handleError(500);
 		return;
 	}
+	
+	std::string url = "/uploads/" + sanitizeFileName(filename);
+	FileRegistry::getInstance().registerFile(session->getValue("username"), url);
 
-	_response.setStatusCode(201);
+	_response.setStatusCode(303);
+	_response.setLocation("/my-uploads");
 	_response.setContentType("text/plain");
-	_response.setBody("Uploaded: " + sanitizeFileName(filename) + "\n");
+	_response.setBody("Uploaded\n");
 }
 
 std::string RequestHandler::resolveFilePath() {
@@ -521,4 +646,3 @@ void RequestHandler::sendErrorPage(int statusCode) {
 	_response.setContentType("text/html");
 	_response.setBody(fallback.str());
 }
-
