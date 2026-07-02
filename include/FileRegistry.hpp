@@ -26,6 +26,7 @@ public:
     std::vector<std::string>    getFiles(const std::string& username) const;
     bool                        hasFiles(const std::string& username) const;
     void                        clearUser(const std::string& username);
+    bool                        isOwner(const std::string& username, const std::string& path);
 
 };
 

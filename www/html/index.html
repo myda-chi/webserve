@@ -53,8 +53,9 @@
         .panel h3 {
             margin-top: 0;
         }
-        button.upload-btn {
-            padding: 8px 24px;
+        /* Buttons */
+        button {
+            padding: 9px 24px;
             background: #4CAF50;
             color: white;
             border: none;
@@ -62,54 +63,16 @@
             cursor: pointer;
             font-size: 1em;
         }
-        /* Delete panel */
-        .file-input {
-            padding: 8px 10px;
-            border-radius: 5px;
-            border: none;
-            font-size: 1em;
-            margin-right: 8px;
-            color: #222;
+        button.secondary {
+            background: rgba(255, 255, 255, 0.22);
         }
-        .delete-button {
-            padding: 8px 20px;
+        button.delete-button {
             background: #e74c3c;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
         }
-        .delete-button:hover {
+        button.delete-button:hover {
             background: #c0392b;
         }
-        .result-message {
-            margin-top: 10px;
-            font-size: 0.9em;
-            min-height: 1.2em;
-        }
-        .result-message.error {
-            color: #ffb3b3;
-        }
-        .result-message.success {
-            color: #b3ffc6;
-        }
-        footer.credits {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 0.85em;
-            opacity: 0.75;
-        }
-        footer.credits .names {
-            font-weight: bold;
-            letter-spacing: 0.5px;
-        }
-        .panel {
-            margin-top: 30px;
-            background: rgba(255,255,255,0.15);
-            padding: 20px;
-            border-radius: 8px;
-        }
+        /* Login form */
         .login-form {
             display: flex;
             flex-wrap: wrap;
@@ -124,25 +87,14 @@
             border-radius: 5px;
             font-size: 1em;
         }
-        button {
-            padding: 9px 24px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-        }
-        button.secondary {
-            background: rgba(255,255,255,0.22);
-        }
+        /* Upload form */
         .upload-form {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             align-items: center;
         }
-        .upload-form input {
+        .upload-form input[type="file"] {
             flex: 1 1 220px;
             min-width: 0;
             color: #333;
@@ -153,53 +105,73 @@
         .logout-form {
             margin-top: 14px;
         }
-        .hidden {
-            display: none;
+        /* Delete panel */
+        .file-input {
+            padding: 8px 10px;
+            border-radius: 5px;
+            border: none;
+            font-size: 1em;
+            margin-right: 8px;
+            color: #222;
         }
+        .result-message {
+            margin-top: 10px;
+            font-size: 0.9em;
+            min-height: 1.2em;
+        }
+        .result-message.error  { color: #ffb3b3; }
+        .result-message.success { color: #b3ffc6; }
+        /* Credits */
+        footer.credits {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.85em;
+            opacity: 0.75;
+        }
+        footer.credits .names {
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🚀 Welcome to Webserv!</h1>
-        <p>
-            Congratulations! Your HTTP server is up and running successfully.
-        </p>
-        <p>
-            This is a custom-built HTTP/1.1 server written in C++98 as part of the 42 curriculum.
-        </p>
+        <p>Congratulations! Your HTTP server is up and running successfully.</p>
+        <p>This is a custom-built HTTP/1.1 server written in C++98 as part of the 42 curriculum.</p>
+
         <div class="links">
             <a href="/cgi-bin">⚙️ CGI Scripts</a>
             <a href="/my-uploads">🗂️ My Uploads</a>
         </div>
 
-        <div class="panel">
-            <h3>📤 Upload a File</h3>
-            <form action="/uploads/" method="POST" enctype="multipart/form-data">
-                <input type="file" name="file" style="margin: 10px 0; color: #333;"><br>
-                <button type="submit" class="upload-btn">Upload</button>
-
+        <!-- LOGIN / UPLOAD -->
         <div class="panel">
             <h3 id="auth-title">🔐 Login</h3>
+
+            <!-- shown when logged OUT -->
             <form id="login-form" class="login-form" action="/login" method="POST">
-                <input type="text" name="username" placeholder="username" maxlength="32" required>
+                <input type="text" name="username" placeholder="Username" maxlength="32" required>
                 <button type="submit">Login</button>
             </form>
+
+            <!-- shown when logged IN -->
             <div id="logged-in-box" class="hidden">
                 <form class="upload-form" action="/uploads/" method="POST" enctype="multipart/form-data">
                     <input type="file" name="file" required>
                     <button type="submit">Upload</button>
                 </form>
+
+                <h3 style="margin-top: 24px;">🗑️ Delete a File</h3>
+                <select id="filePath" class="file-input"></select>
+                <button id="deleteButton" class="delete-button">Delete</button>
+                <p id="resultMessage" class="result-message"></p>
+
                 <form class="logout-form" action="/logout" method="POST">
                     <button class="secondary" type="submit">Logout</button>
                 </form>
             </div>
-        </div>
-
-        <div class="panel">
-            <h3>🗑️ Delete a File</h3>
-            <select id="filePath" class="file-input"></select>
-            <button id="deleteButton" class="delete-button">Delete</button>
-            <p id="resultMessage" class="result-message"></p>
         </div>
 
         <footer class="credits">
@@ -208,21 +180,20 @@
         </footer>
     </div>
 
+    <!-- DELETE SCRIPT -->
     <script>
         var select = document.getElementById('filePath');
         var resultMessage = document.getElementById('resultMessage');
 
         function loadFileOptions() {
-            fetch('/uploads/')
+            fetch('/my-uploads')
                 .then(function (res) { return res.text(); })
                 .then(function (html) {
                     var doc = new DOMParser().parseFromString(html, 'text/html');
-                    var links = doc.querySelectorAll('a');
                     select.innerHTML = '';
-
-                    links.forEach(function (a) {
-                        var name = decodeURIComponent(a.getAttribute('href'))
-                            .replace(/^\/?uploads\/?/, '');
+                    doc.querySelectorAll('a').forEach(function (a) {
+                        var href = decodeURIComponent(a.getAttribute('href'));
+                        var name = href.split('/').pop();
                         if (name && name !== '.' && name !== '..') {
                             var opt = document.createElement('option');
                             opt.value = name;
@@ -249,10 +220,12 @@
 
         loadFileOptions();
     </script>
+
+    <!-- SESSION / LOGIN SCRIPT -->
     <script>
         (function () {
-            var title = document.getElementById('auth-title');
-            var loginForm = document.getElementById('login-form');
+            var title      = document.getElementById('auth-title');
+            var loginForm  = document.getElementById('login-form');
             var loggedInBox = document.getElementById('logged-in-box');
 
             function showLoggedOut() {
@@ -262,21 +235,17 @@
             }
 
             function showLoggedIn(username) {
-                title.textContent = 'Welcome ' + username + '!';
+                title.textContent = 'Welcome, ' + username + '!';
                 loginForm.classList.add('hidden');
                 loggedInBox.classList.remove('hidden');
             }
 
             fetch('/session')
-                .then(function (response) { return response.text(); })
+                .then(function (res) { return res.text(); })
                 .then(function (text) {
                     var prefix = 'Logged in as ';
-                    if (text.indexOf(prefix) !== 0) {
-                        showLoggedOut();
-                        return;
-                    }
-                    var username = text.slice(prefix.length).split('\n')[0];
-                    showLoggedIn(username);
+                    if (text.indexOf(prefix) !== 0) { showLoggedOut(); return; }
+                    showLoggedIn(text.slice(prefix.length).split('\n')[0]);
                 })
                 .catch(showLoggedOut);
         }());

@@ -6,6 +6,7 @@
 # include "HttpResponse.hpp"
 # include "ServerConfig.hpp"
 # include "Route.hpp"
+# include "SessionManager.hpp"
 
 class CgiHandler;
 

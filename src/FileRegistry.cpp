@@ -52,3 +52,17 @@ bool FileRegistry::hasFiles(const std::string& username) const {
 void FileRegistry::clearUser(const std::string& username) {
     _filesByUser.erase(username);
 }
+
+bool FileRegistry::isOwner(const std::string& username, const std::string& path)
+{
+    std::map<std::string, std::vector<std::string> >::const_iterator it = _filesByUser.find(username);
+    if (it == _filesByUser.end())
+        return false;
+   const std::vector<std::string>& files = it->second;
+   for(size_t i = 0; i < files.size(); i++){
+        if(files[i] == path)
+            return true;
+   }
+   return false;
+
+}
