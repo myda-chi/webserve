@@ -71,6 +71,9 @@ namespace {
 					i += 2;
 					continue;
 				}
+			} else if (value[i] == '+') {
+				out += ' ';
+				continue;
 			}
 			out += value[i];
 		}
@@ -185,10 +188,15 @@ namespace {
         }
         return fields;
     }
-
-	static bool isNotSpace(char c) {
-    	return (std::isspace(static_cast<unsigned char>(c)));
-}
+	static bool hasWhitespace(const std::string &username)
+	{
+	    for (size_t i = 0; i < username.length(); i++)
+	    {
+	        if (std::isspace(static_cast<unsigned char>(username[i])))
+	            return true;
+	    }
+	    return false;
+	}
 }
 
 // Orthodox Canonical Form
@@ -387,15 +395,21 @@ void RequestHandler::handleLogin() {
     }
 
     std::map<std::string, std::string> fields = parseFormBody(_request.getBody());
-    std::string username = fields["username"];
+    std::map<std::string, std::string>::iterator it = fields.find("username");
+	if (it == fields.end()) {
+		_response.setStatusCode(303);
+        _response.setLocation("/");
+        _response.setContentType("text/html");
+        _response.setBody("<html><body>Failed to login</body></html>");
+        return;
+	}
 
-    username = trim(username);
-	std::string::iterator it = std::find_if(username.begin(), username.end(), isNotSpace);
-    if (it == username.end()) {
+	std::string username = trim(it->second);
+    if (username.empty() || hasWhitespace(username)) {
         _response.setStatusCode(303);
         _response.setLocation("/");
-		_response.setContentType("text/html");
-    	_response.setBody("<html><body>Falied to login</body></html>");
+        _response.setContentType("text/html");
+        _response.setBody("<html><body>Failed to login</body></html>");
         return;
     }
 
