@@ -21,6 +21,10 @@ void FileRegistry::registerFile(const std::string& username, const std::string& 
     files.push_back(path);
 }
 
+void FileRegistry::registerFile(const std::string& path) {
+    registerFile("anonymous", path);
+}
+
 void FileRegistry::unregisterFile(const std::string& username, const std::string& path) {
     std::map<std::string, std::vector<std::string> >::iterator it = _filesByUser.find(username);
     if (it == _filesByUser.end())
@@ -35,6 +39,10 @@ void FileRegistry::unregisterFile(const std::string& username, const std::string
     }
     if (files.empty())
         _filesByUser.erase(it);
+}
+
+void FileRegistry::unregisterFile(const std::string& path) {
+    unregisterFile("anonymous", path);
 }
 
 std::vector<std::string> FileRegistry::getFiles(const std::string& username) const {

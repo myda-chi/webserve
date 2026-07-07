@@ -408,6 +408,10 @@ void RequestHandler::handleDelete() {
 		std::string urlPath = "/uploads/" + baseName(filePath);
 		FileRegistry::getInstance().unregisterFile(session->getValue("username"), urlPath);
 	}
+	else {
+		std::string urlPath = "/uploads/" + baseName(filePath);
+		FileRegistry::getInstance().unregisterFile(urlPath);
+	}
 	_response.setStatusCode(204);
 	_response.setBody("");
 }
@@ -493,14 +497,15 @@ void RequestHandler::handleLogout() {
 }
 
 void RequestHandler::handleMyUploads() {
+	std::vector<std::string> files;
 	Session* session = _request.getSession();
 	if (session == NULL || !session->hasKey("username")) {
-		handleError(403);
-		return;
+		files = FileRegistry::getInstance().getFiles("anonymous");
 	}
-
-	std::string username = session->getValue("username");
-	std::vector<std::string> files = FileRegistry::getInstance().getFiles(username);
+	else {
+		std::string username = session->getValue("username");
+		files = FileRegistry::getInstance().getFiles(username);
+	}
 
 	std::ostringstream html;
 	html << "<html><body><h1>My Uploads</h1><ul>";
@@ -616,8 +621,9 @@ void RequestHandler::handleFileUpload() {
 		_response.setContentType("text/plain");
 		_response.setBody("Uploaded\n");
 	} else {
+		FileRegistry::getInstance().registerFile(url);
 		_response.setStatusCode(201);
-		_response.setLocation(url);
+		_response.setLocation("/my-uploads");
 		_response.setContentType("text/plain");
 		_response.setBody("Created\n");
 	}
