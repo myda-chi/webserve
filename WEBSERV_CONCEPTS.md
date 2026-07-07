@@ -19,30 +19,16 @@ A comprehensive guide to all the concepts, techniques, and design decisions in t
 11. [CGI (Common Gateway Interface)](#11-cgi-common-gateway-interface)
 12. [Connection Management](#12-connection-management)
 13. [Error Handling Strategy](#13-error-handling-strategy)
-14. [Security Considerations](#14-security-considerations)`
+14. [Security Considerations](#14-security-considerations)
 15. [Design Patterns Used](#15-design-patterns-used)
 16. [End-to-End Request Lifecycle](#16-end-to-end-request-lifecycle)
 17. [Utility Systems](#17-utility-systems)
+18. [Cookies & Sessions (Bonus)](#18-cookies--sessions-bonus)
 
 ---
 
 ## 1. Project Overview
 
-
-```
-raw bytes
-    │
-    ▼
-┌─────────────────┐
-│ 1. Find \r\n\r\n │  ← Headers/body boundary
-└────────┬────────┘
-         │
-    ┌────▼────┐
-    │ headers  │  body_text
-    │  text    │
-    └────┬─────┘
-         │
-    ┌────▼─────────┐
 **Webserv** is an HTTP/1.1 web server written in C++98. It handles client requests asynchronously using non-blocking sockets and the `select()` system call for I/O multiplexing. It supports static file serving, CGI script execution, file uploads, and a NGINX-like configuration format.
 
 ### Key Constraints
@@ -50,12 +36,13 @@ raw bytes
 | Constraint | Why It Matters |
 |---|---|
 | **C++98 only** | No `auto`, range-for, smart pointers, `std::array`, lambdas, move semantics |
-| **One select()** | All I/O multiplexing goes through a single `select()` call (or equivalent) |
-| **One epoll()/kqueue()** | Not used here; `select()` is the simplest cross-platform option |
+| **One select()** | All I/O multiplexing goes through a single `select()` call (or equivalent — epoll/kqueue would also qualify; this project uses `select()` for portability) |
 | **Non-blocking I/O** | All sockets and pipes must be non-blocking |
+| **No errno after I/O** | The subject forbids checking `errno` after a read or write — all decisions come from the return value alone |
 | **No threads** | Single-threaded; all concurrency via async I/O |
-| **Read config file** | Must parse a NGINX-inspired config on startup |
-| **Allowed syscalls only** | No external libraries beyond standard POSIX calls |
+| **fork only for CGI** | The single `fork()` call site in the codebase is `CgiHandler::start()` |
+| **Read config file** | Must parse a NGINX-inspired config on startup (or fall back to `config/default.conf`) |
+| **Allowed syscalls only** | No external libraries beyond standard POSIX calls and the C++98 standard library |
 
 ---
 
@@ -124,19 +111,29 @@ In blocking I/O, a call to `recv()` or `send()` halts the entire program until d
 Every socket and pipe in this server is set to non-blocking mode using `fcntl()`:
 
 ```cpp
-// Setting a file descriptor to non-blocking
-int flags = fcntl(fd, F_GETFL, 0);
-fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+// Setting a file descriptor to non-blocking.
+// The subject only allows F_SETFL, O_NONBLOCK and FD_CLOEXEC on macOS,
+// so no F_GETFL read-modify-write — the flag is set directly:
+fcntl(fd, F_SETFL, O_NONBLOCK);
 ```
 
 This is done at three points:
 1. **Listen sockets** — at creation time (`Socket::create()`)
-2. **Client sockets** — at accept time (`Socket::accept()`)
-3. **CGI pipes** — after fork, both stdin and stdout pipe ends (`CgiHandler::start()`)
+2. **Client sockets** — at accept time (`Server::acceptNewConnection()`)
+3. **CGI pipes** — after fork, the parent's stdin-write and stdout-read ends (`CgiHandler::start()`)
 
-### Handling EAGAIN / EWOULDBLOCK
+### Failed reads/writes — without touching errno
 
-When `recv()` or `send()` returns `-1` with `errno == EAGAIN` (or `EWOULDBLOCK`), it means "try again later — I can't do this right now." The server simply returns to the event loop and waits for `select()` to tell it the fd is ready again.
+The subject **forbids checking `errno` after a read or write** to adjust behaviour. So the server never distinguishes `EAGAIN` from any other error; every decision comes from the return value alone:
+
+| Call | `> 0` | `== 0` | `< 0` |
+|---|---|---|---|
+| `recv()` on client | consume bytes | peer closed → close connection | error → close connection |
+| `send()` on client | advance write buffer | nothing buffered (no-op) | error → close connection |
+| `write()` to CGI stdin | advance body offset | — | transient: retry on next readiness; close stdin only if the child already exited |
+| `read()` from CGI stdout | append output | EOF → CGI output finished | transient: retry on next readiness (a truly dead pipe is bounded by the CGI timeout) |
+
+Because every call is made only after `select()` reported the fd ready, a `-1` is either a genuine error (client sockets: close) or a transient pipe condition (CGI: retry). The two errno checks that do exist in the code are after `select()` (`EINTR`) and after `accept()` — both allowed, since neither is a read or write.
 
 ### Why SIGPIPE is Ignored
 
@@ -177,8 +174,8 @@ The server maintains two pairs:
 
 ```cpp
 while (_running) {
-    FD_COPY(&_masterReadFds, &_readFds);   // Copy master → working
-    FD_COPY(&_masterWriteFds, &_writeFds);
+    _readFds = _masterReadFds;    // Copy master → working (fd_set assignment)
+    _writeFds = _masterWriteFds;
 
     int activity = select(_maxFd + 1, &_readFds, &_writeFds, NULL, &timeout);
 
@@ -304,6 +301,13 @@ The parser enforces these HTTP/1.1 compliance checks:
 | `Host` header required for HTTP/1.1 | 400 |
 | Method must be uppercase alpha-only token | 400 |
 | URI must start with `/` | 400 |
+| Version must be `HTTP/1.0` or `HTTP/1.1` (well-formed `HTTP/x.y` otherwise) | 505 |
+| Version is not even `HTTP/...` shaped | 400 |
+| Request line longer than 8 KB | 414 |
+| Header section longer than 32 KB | 431 |
+| Declared `Content-Length` exceeds `client_max_body_size` | 413 (early — before the body is buffered) |
+
+The size caps are checked **while data is still arriving**, so a client that never terminates its headers (or declares a 20 MB body) is rejected without the server buffering it. When a check fails, the request is marked *invalid but complete*: the server stops reading, sends the error response, and closes the connection.
 
 ### Handling Different Line Endings
 
@@ -338,6 +342,10 @@ The parser:
 
 After decoding, `_contentLength` is set to the decoded body size, and the chunked encoding is treated as resolved.
 
+Because a chunked request declares no total length up front, `client_max_body_size` is enforced **during** decoding: the moment the accumulated decoded size crosses the limit, the request is failed with 413 mid-stream — the server does not wait for the terminating 0-chunk.
+
+This matters for CGI too: the CGI child never sees chunked framing. The server un-chunks the body first and delivers the decoded bytes on the child's stdin, closing the pipe afterwards so the script sees EOF as end-of-body (exactly what the subject requires).
+
 ---
 
 ## 6. HTTP Response Building
@@ -347,7 +355,7 @@ After decoding, `_contentLength` is set to the decoded body size, and the chunke
 ```
 HTTP/1.1 200 OK\r\n
 Date: Mon, 08 Jun 2026 12:00:00 GMT\r\n
-Server: webserv/1.0\r\n
+Server: webserv/0.1\r\n
 Content-Type: text/html\r\n
 Content-Length: 1234\r\n
 Connection: close\r\n
@@ -359,29 +367,38 @@ Connection: close\r\n
 
 | Code | Reason Phrase | Used For |
 |---|---|---|
-| 200 | OK | Successful GET, successful POST |
-| 201 | Created | Successful file upload |
+| 200 | OK | Successful GET, autoindex listing, session info |
+| 201 | Created | Successful anonymous file upload (`Location` points at the new resource) |
 | 204 | No Content | Successful DELETE |
-| 301 | Moved Permanently | Redirects |
-| 302 | Found | (Available for use) |
-| 400 | Bad Request | Malformed request |
-| 403 | Forbidden | Access denied |
-| 404 | Not Found | File/route not found |
-| 405 | Method Not Allowed | Method not in route allowlist |
-| 408 | Request Timeout | Client idle timeout |
-| 413 | Content Too Large | Body exceeds `client_max_body_size` |
-| 500 | Internal Server Error | Generic server error |
-| 501 | Not Implemented | PUT method |
-| 502 | Bad Gateway | CGI returned error \\
+| 301 | Moved Permanently | Redirects (default `return` code) |
+| 302/307 | Found / Temporary Redirect | Redirects when configured |
+| 303 | See Other | Login/logout and logged-in upload (bounce to `/my-uploads`) |
+| 400 | Bad Request | Malformed request line/headers, missing Host, bad chunk framing |
+| 403 | Forbidden | Access denied, traversal attempt, directory without autoindex |
+| 404 | Not Found | File/route/CGI script not found |
+| 405 | Method Not Allowed | Method not in route allowlist (with `Allow` header) |
+| 413 | Payload Too Large | Body exceeds `client_max_body_size` (rejected early, see §5) |
+| 414 | URI Too Long | Request line over 8 KB |
+| 415 | Unsupported Media Type | `/login` POST that isn't form-urlencoded |
+| 431 | Request Header Fields Too Large | Header section over 32 KB |
+| 500 | Internal Server Error | Generic server error (e.g., upload dir missing) |
+| 501 | Not Implemented | Any method outside GET/POST/DELETE/HEAD |
+| 502 | Bad Gateway | CGI interpreter missing/not executable, non-zero exit with no output |
 | 504 | Gateway Timeout | CGI execution timeout |
-| 505 | HTTP Version Not Supported | Non 1.0/1.1 versions |
+| 505 | HTTP Version Not Supported | Well-formed but unsupported HTTP versions |
+
+Note on timeouts: an idle client (30 s) is simply **disconnected**, no 408 is sent — by that point there is no valid request to respond to.
+
+### HEAD Responses
+
+`HEAD` runs the exact same handler as `GET`, but the body is dropped at serialization time (`HttpResponse::setSuppressBody()`, applied in `Client::prepareResponse()`). The `Content-Length` header still reflects the real entity size, as RFC 7231 requires — a `HEAD /index.html` and a `GET /index.html` report the same length. Because suppression happens at build time, this works uniformly for static files, CGI output, and error pages.
 
 ### Response Headers Set Automatically
 
 | Header | When Set |
 |---|---|
 | `Date` | Always (RFC 7231 format) |
-| `Server` | Always (`webserv/1.0`) |
+| `Server` | Always (`webserv/0.1`) |
 | `Content-Type` | When body exists (from MIME map or CGI) |
 | `Content-Length` | When body exists |
 | `Connection` | `close` by default; `keep-alive` per conditions |
@@ -509,15 +526,24 @@ A route path `/foo` matches request path `/foo/bar` but **not** `/foobar`:
 
 ### Route Resolution Order
 
-When a request arrives, here's the decision order:
+When a request arrives, here's the decision order (`Client::processRequest`):
 
 ```
-1. Match route (longest prefix)
-2. If route has redirect → send redirect, STOP
-3. If route has allowed_methods AND method not in list → 405, STOP
-4. If body > client_max_body_size → 413, STOP
-5. If CGI extension matches → start CGI, STOP
-6. Dispatch to method handler (GET/POST/DELETE)
+0. If the parser flagged the request invalid (400/413/414/431/505)
+   → error response immediately, connection closed
+1. CGI check first (RequestHandler::startCgiIfNeeded):
+   match route → no redirect → method is GET/POST/HEAD and allowed
+   → a path segment carries a configured CGI extension
+   → fork the CGI and return (async from here on)
+2. Otherwise RequestHandler::handle():
+   a. Session endpoints (/session, /login, /logout, /my-uploads) — bonus
+   b. Match route (longest prefix)
+   c. Route has a redirect → 301/302/307, STOP
+   d. Method outside GET/POST/DELETE/HEAD → 501, STOP
+   e. Method not in the route's allowed_methods → 405, STOP
+   f. Body over client_max_body_size → 413 (backstop; normally
+      caught earlier by the parser), STOP
+   g. Dispatch to method handler (GET/HEAD/POST/DELETE)
 ```
 
 ---
@@ -626,6 +652,17 @@ This prevents:
 
 If no filename is given, a name like `upload_<timestamp>.dat` is generated.
 
+### Upload Response Semantics
+
+Uploads work for **everyone** — no login required (the subject's "clients must be able to upload files" is unconditional). The response differs by session state:
+
+| Client state | Response | Extra behaviour |
+|---|---|---|
+| Anonymous | `201 Created` + `Location: /uploads/<name>` | none |
+| Logged-in session (bonus) | `303 See Other` → `/my-uploads` | file registered to the user in `FileRegistry` |
+
+DELETE follows the same principle: anyone can delete a file (204); the per-user registry entry is cleaned up only when a session exists.
+
 ---
 
 ## 11. CGI (Common Gateway Interface)
@@ -705,7 +742,7 @@ The server sets these environment variables per the CGI/1.1 spec (RFC 3875):
 | Variable | Source | Example |
 |---|---|---|
 | `GATEWAY_INTERFACE` | Hardcoded | `CGI/1.1` |
-| `SERVER_SOFTWARE` | Hardcoded | `webserv/1.0` |
+| `SERVER_SOFTWARE` | Hardcoded | `webserv/0.1` |
 | `SERVER_PROTOCOL` | Request | `HTTP/1.1` |
 | `SERVER_PORT` | Config | `8080` |
 | `REQUEST_METHOD` | Request | `GET` or `POST` |
@@ -715,11 +752,26 @@ The server sets these environment variables per the CGI/1.1 spec (RFC 3875):
 | `QUERY_STRING` | URI parsing | `q=hello` |
 | `PATH_INFO` | URI after script | `/extra/path` |
 | `PATH_TRANSLATED` | PATH_INFO mapped to fs | `/docroot/extra/path` |
-| `CONTENT_LENGTH` | Request header | `42` |
+| `CONTENT_LENGTH` | Decoded body size (post un-chunking) | `42` |
 | `CONTENT_TYPE` | Request header | `application/x-www-form-urlencoded` |
-| `SERVER_NAME` | Config | `localhost` |
-| `REDIRECT_STATUS` | Hardcoded | `200` |
+| `SERVER_NAME` | `Host` header (fallback `localhost`) | `localhost` |
+| `REMOTE_ADDR` | Client socket address (`ntohl` on `sockaddr_in`) | `127.0.0.1` |
+| `REDIRECT_STATUS` | Hardcoded (needed by php-cgi) | `200` |
 | `HTTP_*` | Each request header | `HTTP_HOST=localhost`, `HTTP_USER_AGENT=...` |
+
+**Ordering matters**: the child inherits its environment at `fork()` time, so `SERVER_PORT`, `SCRIPT_NAME`, `PATH_INFO`, and `REMOTE_ADDR` are all set on the `CgiHandler` **before** `start()` is called. (An earlier version set the port after `start()` — the CGI always saw port 80.)
+
+**PATH_INFO extraction**: the request path is scanned segment by segment for the first one whose extension is registered as CGI for the route. Everything before (inclusive) is `SCRIPT_NAME`, everything after is `PATH_INFO`:
+
+```
+GET /cgi-bin/env.py/extra/path?x=1
+      SCRIPT_NAME = /cgi-bin/env.py
+      PATH_INFO   = /extra/path
+      PATH_TRANSLATED = <route root>/extra/path
+      QUERY_STRING = x=1
+```
+
+`cgi-bin/env.py` dumps all of these — use it to demonstrate RFC 3875 compliance during evaluation.
 
 ### Parsing CGI Output
 
@@ -749,7 +801,13 @@ The parser:
 | CGI executable doesn't exist or isn't executable | 502 |
 | Non-zero exit with empty output | 502 |
 | Execution timeout (5 seconds) | 504 |
-| `execve()` fails | 500 |
+| `execve()` fails | child `_exit(1)` → surfaces as 502 (non-zero exit, no output) |
+
+### Body Delivery & the No-Truncation Rule
+
+The request body is written to the CGI's stdin **through the event loop** — the stdin pipe fd sits in the write `fd_set` and gets one `write()` per readiness event, 8 KB at a time. A failed write is **retried** on the next event rather than treated as fatal: closing the pipe on a transient failure would deliver a truncated body followed by EOF, which the script cannot distinguish from a complete body. stdin is closed only when (a) the last body byte was written — giving the child its EOF — or (b) the child has already exited (checked with `waitpid(WNOHANG)`).
+
+Symmetrically, the server reads the CGI's stdout until **EOF**, then computes `Content-Length` itself — so scripts that don't emit `Content-Length` (the subject explicitly allows this) still produce a valid response.
 
 ### CGI Timeout
 
@@ -888,6 +946,18 @@ Uploaded filenames are strictly sanitized to only allow `[a-zA-Z0-9._-]`. This p
 - Shell metacharacters in filenames
 - Unicode homograph attacks
 
+### Request-Size Limits (DoS Protection)
+
+A malicious client must not be able to grow server memory without bound. Three caps apply while data is still arriving (see §5):
+
+| Limit | Threshold | Response |
+|---|---|---|
+| Request line | 8 KB | 414 |
+| Header section | 32 KB | 431 |
+| Body (declared or chunked) | `client_max_body_size` | 413, rejected before/while buffering |
+
+Combined with the 30-second idle timeout, a slow-loris-style client that drips bytes forever is either capped by size or disconnected by time.
+
 ### SO_REUSEADDR
 
 `SO_REUSEADDR` is set on all listen sockets, allowing immediate rebinding after server restart (even if connections are in TIME_WAIT state).
@@ -931,11 +1001,12 @@ This prevents fd leaks even when exceptions are thrown.
 Different HTTP methods are handled by different private methods, dispatched via an if/else chain:
 
 ```cpp
+// Anything outside GET/POST/DELETE/HEAD was already rejected with 501
+// before this dispatch runs.
 if (method == "GET") handleGet();
+else if (method == "HEAD") handleHead();  // GET with the body suppressed
 else if (method == "POST") handlePost();
 else if (method == "DELETE") handleDelete();
-else if (method == "HEAD") handleHead();
-else if (method == "PUT") handlePut();  // returns 501
 ```
 
 ### Observer-Like — select() Event Loop
@@ -1089,6 +1160,52 @@ std::string getHttpDate();  // Returns: "Mon, 08 Jun 2026 12:00:00 GMT"
 ```
 
 Uses RFC 7231 (HTTP-date) format via `strftime()`.
+
+---
+
+## 18. Cookies & Sessions (Bonus)
+
+### Architecture
+
+```
+Request ──▶ SessionMiddleware::processRequest()
+              │  parse Cookie header (CookieParser)
+              │  look up SESSID in SessionManager
+              │  hit → attach Session* to the request
+              │  miss/expired → create a new session
+              ▼
+        RequestHandler (business logic reads request.getSession())
+              ▼
+Response ◀── SessionMiddleware::processResponse()
+              │  if the session id changed (new session):
+              │  Set-Cookie: SESSID=<64-hex-chars>
+```
+
+The middleware wraps **every** request (`Client::processRequest` calls it before and after handling), so any handler can rely on `request.getSession()` being non-NULL.
+
+### Session Store (`SessionManager`)
+
+- **Singleton** holding an in-memory `std::map<std::string, Session>`; each `Session` is a `std::map<std::string, std::string>` of user data plus a last-accessed timestamp.
+- **Session IDs**: 32 random bytes read from `/dev/urandom`, hex-encoded to 64 chars (falls back to `rand()` only if `/dev/urandom` cannot be opened). Unguessable IDs are what make the cookie safe to trust.
+- **Expiry**: TTL of 300 seconds since last access. Expired sessions are lazily purged — on lookup and on each new-session creation. Every successful lookup `touch()`es the session.
+- Sessions live in memory only: a server restart logs everyone out (acceptable for the bonus scope).
+
+### The Demo Flow (what to show at defense)
+
+| Endpoint | Method | Behaviour |
+|---|---|---|
+| `/session` | GET | Shows `Logged in as <user>` or `Not logged in` |
+| `/login` | POST (form-urlencoded) | Validates `username` (non-empty, no whitespace), stores it in the session, 303 → `/` |
+| `/logout` | POST | Removes `username` from the session, 303 → `/` |
+| `/my-uploads` | GET | Lists the files this session's user uploaded (403 when not logged in) |
+
+`FileRegistry` (another in-memory singleton) maps `username → uploaded file URLs`; uploads made while logged in are registered, DELETEs unregister. This is the "simple example" of session state the subject's bonus asks for: two browsers with different cookies see different `/my-uploads` lists.
+
+`test_sessions.sh` walks this flow end-to-end with curl.
+
+### Important Boundary
+
+Sessions **never gate the mandatory features**: uploads and DELETE work for anonymous clients (201/204). The session layer only adds per-user tracking on top — see §10.
 
 ---
 
