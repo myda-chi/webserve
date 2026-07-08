@@ -61,6 +61,8 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
         // Reload the correct list based on if we are logged in
         const isGlobal = panelTitle.textContent.includes('Global');
         loadFileOptions(isGlobal ? '/uploads/' : '/my-uploads');
+        // const isGlobal = panelTitle.textContent.includes('Global');
+        loadFileOptions('/my-uploads');
     } catch (error) {
         resultMessage.textContent = 'Error deleting file';
         resultMessage.className = 'result-message error';
@@ -73,6 +75,7 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
         showLoginBtn.classList.remove('hidden');
         panelTitle.textContent = '🌍 Global Uploads';
         loadFileOptions('/uploads/');
+        loadFileOptions('/my-uploads');
     };
 
     try {
