@@ -457,7 +457,8 @@ def test_11_delete():
     header("4. DELETE METHOD")
     # First create a file to delete
     test_file = f"/uploads/_delete_test_{random.randint(1000, 9999)}.txt"
-    http_request("POST", test_file, body=b"temporary file for DELETE test")
+    s, h, b = http_request("POST", test_file, body=b"temporary file for DELETE test")
+    test_file = (h or {}).get("location", test_file)
     time.sleep(0.1)
 
     status, headers, body = http_request("DELETE", test_file)
@@ -956,6 +957,7 @@ def test_34_file_upload_and_retrieve():
         fail_msg("File upload", f"POST {upload_filename} returned {code}")
         return
     pass_msg(f"File uploaded: POST {upload_filename} -> {code}")
+    upload_filename = headers.get("location", upload_filename)
 
     # Retrieve
     time.sleep(0.1)
@@ -983,13 +985,20 @@ def test_35_empty_body_upload():
         fail_msg("Empty POST body", f"unexpected {code}")
 
 def test_36_upload_path_cleanup():
-    section("Upload directory remains writable")
+    section("Repeated uploads to the same name get unique files")
     fname = f"/uploads/_stress_{random.randint(1000, 9999)}.txt"
+    locations = []
     for i in range(5):
         s, h, b = http_request("POST", fname, body=f"iteration {i}".encode())
-    # Cleanup
-    http_request("DELETE", fname)
-    pass_msg("5 sequential uploads to same path succeeded")
+        loc = (h or {}).get("location")
+        if loc:
+            locations.append(loc)
+    if len(set(locations)) == 5:
+        pass_msg("5 anonymous uploads to the same name -> 5 distinct files (no overwrite)")
+    else:
+        fail_msg("Upload collision handling", f"expected 5 unique locations, got {locations}")
+    for loc in set(locations):
+        http_request("DELETE", loc)
 
 # ---------------------------------------------------------------------------
 # 11. Concurrency & Resilience
@@ -1310,6 +1319,7 @@ def test_54_eval_file_upload_flow():
     c = s.split()[1] if len(s.split()) > 1 else ""
     if c not in ("200", "201", "202", "204"):
         fail_msg("File upload E2E", f"upload returned {c}"); return
+    test_file = h.get("location", test_file)
 
     # retrieve
     time.sleep(0.1)

@@ -93,6 +93,10 @@ const std::vector<std::string>& ServerConfig::getIndex() const {
 	return _index;
 }
 
+const std::vector<Route>& ServerConfig::getRoutes() const {
+	return _routes;
+}
+
 // Utility methods
 std::string ServerConfig::getErrorPage(int code) const {
 	std::map<int, std::string>::const_iterator it = _errorPages.find(code);

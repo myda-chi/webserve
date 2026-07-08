@@ -1,6 +1,7 @@
 #include "../include/Server.hpp"
 #include "../include/ConfigParser.hpp"
 #include "../include/Logger.hpp"
+#include "../include/FileRegistry.hpp"
 #include <iostream>
 #include <cstdlib>
 #include <csignal>
@@ -75,6 +76,10 @@ int main(int argc, char* argv[]) {
 		std::vector<ServerConfig> configs = parser.getServerConfigs();
 		for (size_t i = 0; i < configs.size(); ++i) {
 			server.addServerConfig(configs[i]);
+			const std::vector<Route>& routes = configs[i].getRoutes();
+			for (size_t j = 0; j < routes.size(); ++j)
+				if (!routes[j].getUploadPath().empty())
+					FileRegistry::getInstance().loadFromDirectory(routes[j].getUploadPath());
 		}
 
 		// Setup signal handlers

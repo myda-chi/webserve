@@ -21,6 +21,7 @@ public:
 
     ~FileRegistry();
 
+    void                        loadFromDirectory(const std::string& dir);
     void                        registerFile(const std::string& username, const std::string& path);
     void                        registerFile(const std::string& path);
     void                        unregisterFile(const std::string& username, const std::string& path);

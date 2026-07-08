@@ -37,7 +37,9 @@ SRCS		= $(SRC_DIR)/main.cpp \
 			  $(SRC_DIR)/SessionMiddleware.cpp \
 			  $(SRC_DIR)/CookieParser.cpp \
 			  $(SRC_DIR)/SessionManager.cpp \
-			  $(SRC_DIR)/FileRegistry.cpp
+			  $(SRC_DIR)/FileRegistry.cpp \
+			  $(SRC_DIR)/SessionController.cpp \
+			  $(SRC_DIR)/HttpUtils.cpp
 
 # Object files
 OBJS		= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
@@ -57,7 +59,9 @@ HEADERS		= $(INC_DIR)/Server.hpp \
 			  $(INC_DIR)/SessionMiddleware.hpp \
 			  $(INC_DIR)/CookieParser.hpp \
 			  $(INC_DIR)/SessionManager.hpp \
-			  $(INC_DIR)/FileRegistry.hpp 
+			  $(INC_DIR)/FileRegistry.hpp \
+			  $(INC_DIR)/SessionController.hpp \
+			  $(INC_DIR)/HttpUtils.hpp
 
 # Colors
 GREEN		= \033[0;32m

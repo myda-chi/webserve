@@ -40,7 +40,7 @@ else
     fail "No Set-Cookie header found — server did not issue a session cookie"
 fi
 
-COOKIE_NAME=$(grep -i "Set-Cookie" <<< "$RESP1" | sed -E 's/^[Ss]et-[Cc]ookie:\s*([^=]+)=.*/\1/' | tr -d '\r')
+COOKIE_NAME=$(grep -i "Set-Cookie" <<< "$RESP1" | sed -E 's/^[Ss]et-[Cc]ookie:[[:space:]]*([^=]+)=.*/\1/' | tr -d '\r')
 echo "  Detected cookie name: ${COOKIE_NAME:-<none found>}"
 
 # ---------------------------------------------------------

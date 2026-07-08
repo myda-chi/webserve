@@ -1,5 +1,8 @@
 #include "../include/FileRegistry.hpp"
 
+#include <dirent.h>
+#include <sys/stat.h>
+
 FileRegistry::FileRegistry() {}
 
 FileRegistry::~FileRegistry() {}
@@ -59,4 +62,24 @@ bool FileRegistry::hasFiles(const std::string& username) const {
 
 void FileRegistry::clearUser(const std::string& username) {
     _filesByUser.erase(username);
+}
+
+void FileRegistry::loadFromDirectory(const std::string& dir) {
+    DIR* d = opendir(dir.c_str());
+    if (d == NULL)
+        return;
+    struct dirent* entry;
+    while ((entry = readdir(d)) != NULL) {
+        std::string name(entry->d_name);
+        if (name.empty() || name[0] == '.')
+            continue;
+        std::string full = dir + (dir[dir.size() - 1] == '/' ? "" : "/") + name;
+        struct stat st;
+        if (::stat(full.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+            continue;
+        size_t tilde = name.find('~');
+        std::string owner = tilde == std::string::npos ? "anonymous" : name.substr(0, tilde);
+        registerFile(owner, "/uploads/" + name);
+    }
+    closedir(d);
 }

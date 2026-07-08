@@ -40,6 +40,7 @@ public:
 	size_t								getClientMaxBodySize() const;
 	const std::string&					getRoot() const;
 	const std::vector<std::string>&		getIndex() const;
+	const std::vector<Route>&			getRoutes() const;
 
 	// Utility methods
 	std::string		getErrorPage(int code) const;
