@@ -62,7 +62,7 @@ namespace {
 }
 
 // Orthodox Canonical Form
-HttpRequest::HttpRequest() : _httpVersion("HTTP/1.1"), _isComplete(false), _isChunked(false), _isValid(true), _errorCode(0), _contentLength(0), _maxBodySize(0), _session(NULL), _sessionId("") {}
+HttpRequest::HttpRequest() : _httpVersion("HTTP/1.1"), _isComplete(false), _isChunked(false), _isValid(true), _errorCode(0), _contentLength(0), _maxBodySize(0), _headersParsed(false), _session(NULL), _sessionId("") {}
 
 
 HttpRequest::HttpRequest(const HttpRequest& other) {
@@ -84,6 +84,7 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& other) {
 		_contentLength = other._contentLength;
 		_maxBodySize = other._maxBodySize;
 		_rawRequest = other._rawRequest;
+		_headersParsed = other._headersParsed;
 		_session = other._session;
 		_sessionId = other._sessionId;
 	}
@@ -114,9 +115,25 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 	if (headerEnd > MAX_HEADER_SECTION)
 		return setError(431);
 
-	std::string headerSection = rawRequest.substr(0, headerEnd);
 	std::string bodySection = rawRequest.substr(headerEnd + sepLength);
+	if (!parseHeaderSection(rawRequest.substr(0, headerEnd)))
+		return false;
+	_headersParsed = true;
 
+	if (_maxBodySize > 0 && !_isChunked && _contentLength > _maxBodySize)
+		return setError(413);
+
+	if (_isChunked) {
+		parseChunkedBody(bodySection);
+		return true;
+	}
+
+	_body = bodySection;
+	finalizeBodyIfComplete();
+	return true;
+}
+
+bool HttpRequest::parseHeaderSection(const std::string& headerSection) {
 	size_t lineEnd = headerSection.find("\r\n");
 	size_t lineSep = 2;
 	if (lineEnd == std::string::npos) {
@@ -148,30 +165,73 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 	}
 	if (_httpVersion == "HTTP/1.1" && (!hasHeader("host") || getHeader("host").empty()))
 		return setError(400);
-
-	if (_maxBodySize > 0 && !_isChunked && _contentLength > _maxBodySize)
-		return setError(413);
-
-	if (_isChunked) {
-		parseChunkedBody(bodySection);
-		return true;
-	}
-
-	parseBody(bodySection);
-	if (_contentLength == 0)
-		_isComplete = true;
-	else if (_body.size() >= _contentLength) {
-		_body = _body.substr(0, _contentLength);
-		_isComplete = true;
-	}
-
 	return true;
 }
 
+void HttpRequest::finalizeBodyIfComplete() {
+	if (_contentLength == 0) {
+		_isComplete = true;
+	} else if (_body.size() >= _contentLength) {
+		if (_body.size() > _contentLength)
+			_body.resize(_contentLength);
+		_isComplete = true;
+	}
+}
+
 void HttpRequest::appendData(const std::string& data) {
-	_rawRequest.append(data);
-	std::string rawRequest = _rawRequest;
-	parse(rawRequest);
+	if (_isComplete)
+		return;
+
+	if (!_headersParsed) {
+		_rawRequest.append(data);
+
+		size_t sepLength = 4;
+		size_t headerEnd = _rawRequest.find("\r\n\r\n");
+		if (headerEnd == std::string::npos) {
+			headerEnd = _rawRequest.find("\n\n");
+			sepLength = 2;
+		}
+		if (headerEnd == std::string::npos) {
+			if (_rawRequest.find('\n') == std::string::npos && _rawRequest.size() > MAX_REQUEST_LINE)
+				setError(414);
+			else if (_rawRequest.size() > MAX_HEADER_SECTION)
+				setError(431);
+			return;
+		}
+		if (headerEnd > MAX_HEADER_SECTION) {
+			setError(431);
+			return;
+		}
+
+		std::string leftover = _rawRequest.substr(headerEnd + sepLength);
+		std::string headerSection = _rawRequest.substr(0, headerEnd);
+		_rawRequest.clear();
+		_headersParsed = true;
+
+		if (!parseHeaderSection(headerSection))
+			return;
+		if (_maxBodySize > 0 && !_isChunked && _contentLength > _maxBodySize) {
+			setError(413);
+			return;
+		}
+
+		if (_isChunked) {
+			_rawRequest = leftover;
+			parseChunkedBody(_rawRequest);
+		} else {
+			_body = leftover;
+			finalizeBodyIfComplete();
+		}
+		return;
+	}
+
+	if (_isChunked) {
+		_rawRequest.append(data);
+		parseChunkedBody(_rawRequest);
+	} else {
+		_body.append(data);
+		finalizeBodyIfComplete();
+	}
 }
 
 bool HttpRequest::setError(int code) {
@@ -210,6 +270,7 @@ void HttpRequest::clear() {
 	_errorCode = 0;
 	_contentLength = 0;
 	_rawRequest.clear();
+	_headersParsed = false;
 	_session = NULL;
 	_sessionId.clear();
 }

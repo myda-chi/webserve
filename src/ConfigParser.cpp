@@ -191,6 +191,8 @@ void ConfigParser::parseRouteDirective(const std::string& line, Route& route) {
 		route.setRedirect(tokens[2]);
 	} else if (tokens[0] == "cgi_extension" && tokens.size() >= 3) {
 		route.addCgiExtension(tokens[1], tokens[2]);
+	} else if (tokens[0] == "client_max_body_size" && tokens.size() >= 2) {
+		route.setClientMaxBodySize(static_cast<size_t>(std::strtoul(tokens[1].c_str(), NULL, 10)));
 	}
 }
 

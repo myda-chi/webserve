@@ -166,12 +166,15 @@ void RequestHandler::handle() {
 		return;
 	}
 
-	if (_request.getBody().size() > _config.getClientMaxBodySize()) {
+	size_t bodyLimit = _config.getClientMaxBodySize();
+	if (_route != NULL && _route->hasClientMaxBodySize())
+		bodyLimit = _route->getClientMaxBodySize();
+	if (bodyLimit > 0 && _request.getBody().size() > bodyLimit) {
 		handleError(413);
 		return;
 	}
 
-	if (_request.getMethod() == "GET")
+	if (_request.getMethod() == "GET" || _request.getMethod() == "HEAD")
 		handleGet();
 	else if (_request.getMethod() == "POST")
 		handlePost();
@@ -191,11 +194,17 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 		return false;
 	if (_request.getMethod() != "GET" && _request.getMethod() != "POST" && _request.getMethod() != "HEAD")
 		return false;
-	if (!isAllowedMethod(_request.getMethod()))
-		return false;
 
 	std::string reqPath = urlDecode(_request.getPath());
-	size_t split = findCgiSplit(reqPath, *_route);
+
+	Route* cgiRoute = _config.matchCgiRoute(reqPath);
+	if (cgiRoute == NULL)
+		return false;
+	std::string cgiMethod = (_request.getMethod() == "HEAD") ? "GET" : _request.getMethod();
+	if (!cgiRoute->isMethodAllowed(cgiMethod))
+		return false;
+
+	size_t split = findCgiSplit(reqPath, *cgiRoute);
 	if (split == std::string::npos)
 		return false;
 
@@ -206,10 +215,6 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 		return false;
 
 	handled = true;
-	if (!pathExists(scriptPath)) {
-		handleError(404);
-		return false;
-	}
 
 	std::string root = _config.getRoot();
 	if (!_route->getRoot().empty())
@@ -219,9 +224,12 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 
 	cgi.setServerPort(_config.getPort());
 	cgi.setScriptName(scriptUri);
-	cgi.setPathInfo(pathInfo, pathInfo.empty() ? "" : root + pathInfo);
+	if (pathInfo.empty())
+		cgi.setPathInfo(reqPath, scriptPath);
+	else
+		cgi.setPathInfo(pathInfo, root + pathInfo);
 
-	if (!cgi.start(scriptPath, *_route)) {
+	if (!cgi.start(scriptPath, *cgiRoute)) {
 		if (_response.getStatusCode() == 200)
 			handleError(502);
 		return false;
@@ -426,8 +434,8 @@ void RequestHandler::handleFileUpload() {
 	else
 		FileRegistry::getInstance().registerFile(url);
 
-	_response.setStatusCode(303);
-	_response.setLocation("/my-uploads");
+	_response.setStatusCode(201);
+	_response.setLocation(url);
 	_response.setContentType("text/plain");
 	_response.setBody("Uploaded\n");
 }
@@ -492,8 +500,6 @@ std::string RequestHandler::resolveDecodedPath(const std::string& decodedPath) {
 bool RequestHandler::isAllowedMethod(const std::string& method) {
 	if (_route == NULL)
 		return method == "GET" || method == "POST" || method == "DELETE" || method == "HEAD";
-	if (method == "HEAD")
-		return _route->isMethodAllowed("GET");
 	return _route->isMethodAllowed(method);
 }
 

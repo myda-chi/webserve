@@ -58,7 +58,6 @@ ssize_t Client::read() {
 	char buffer[8192];
 	ssize_t bytes = ::recv(_fd, buffer, sizeof(buffer), 0);
 	if (bytes > 0) {
-		_readBuffer.append(buffer, static_cast<size_t>(bytes));
 		_request.appendData(std::string(buffer, static_cast<size_t>(bytes)));
 		updateLastActivity();
 		return bytes;

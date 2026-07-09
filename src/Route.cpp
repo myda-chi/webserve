@@ -3,10 +3,10 @@
 #include <algorithm>
 
 // Orthodox Canonical Form
-Route::Route() : _path("/"), _autoindex(false), _redirectCode(301) {
+Route::Route() : _path("/"), _autoindex(false), _redirectCode(301), _clientMaxBodySize(0), _hasClientMaxBodySize(false) {
 }
 
-Route::Route(const std::string& path) : _path(path), _autoindex(false), _redirectCode(301) {
+Route::Route(const std::string& path) : _path(path), _autoindex(false), _redirectCode(301), _clientMaxBodySize(0), _hasClientMaxBodySize(false) {
 }
 
 Route::Route(const Route& other) {
@@ -24,6 +24,8 @@ Route& Route::operator=(const Route& other) {
 		_redirectCode = other._redirectCode;
 		_uploadPath = other._uploadPath;
 		_cgiExtensions = other._cgiExtensions;
+		_clientMaxBodySize = other._clientMaxBodySize;
+		_hasClientMaxBodySize = other._hasClientMaxBodySize;
 	}
 	return *this;
 }
@@ -64,6 +66,11 @@ void Route::addCgiExtension(const std::string& ext, const std::string& handler) 
 	_cgiExtensions[ext] = handler;
 }
 
+void Route::setClientMaxBodySize(size_t size) {
+	_clientMaxBodySize = size;
+	_hasClientMaxBodySize = true;
+}
+
 // Getters
 const std::string& Route::getPath() const {
 	return _path;
@@ -95,6 +102,14 @@ int Route::getRedirectCode() const {
 
 const std::string& Route::getUploadPath() const {
 	return _uploadPath;
+}
+
+bool Route::hasClientMaxBodySize() const {
+	return _hasClientMaxBodySize;
+}
+
+size_t Route::getClientMaxBodySize() const {
+	return _clientMaxBodySize;
 }
 
 // Utility methods

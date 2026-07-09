@@ -22,11 +22,14 @@ private:
 	size_t								_contentLength;
 	size_t								_maxBodySize;
 	std::string							_rawRequest;
+	bool								_headersParsed;
 	Session*							_session;
 	std::string							_sessionId;
 
 	// Parsing helper methods
 	void		parseRequestLine(const std::string& line);
+	bool		parseHeaderSection(const std::string& headerSection);
+	void		finalizeBodyIfComplete();
 	void		parseHeaders(const std::string& headerSection);
 	void		parseBody(const std::string& bodySection);
 	void		parseUri();

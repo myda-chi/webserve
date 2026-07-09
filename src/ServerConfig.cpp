@@ -15,7 +15,7 @@
 #include <algorithm>
 
 // Orthodox Canonical Form
-ServerConfig::ServerConfig() : _host("0.0.0.0"), _port(8080), _clientMaxBodySize(1048576) {
+ServerConfig::ServerConfig() : _host("0.0.0.0"), _port(8080), _clientMaxBodySize(0) {
 }
 
 ServerConfig::ServerConfig(const ServerConfig& other) {
@@ -118,6 +118,25 @@ Route* ServerConfig::matchRoute(const std::string& path) {
 		}
 	}
 	return best;
+}
+
+Route* ServerConfig::matchCgiRoute(const std::string& path) {
+	for (size_t i = 0; i < _routes.size(); ++i) {
+		size_t segStart = 0;
+		while (segStart < path.size()) {
+			size_t segEnd = path.find('/', segStart + 1);
+			if (segEnd == std::string::npos)
+				segEnd = path.size();
+			size_t dot = path.rfind('.', segEnd - 1);
+			if (dot != std::string::npos && dot > segStart) {
+				std::string ext = path.substr(dot, segEnd - dot);
+				if (_routes[i].hasCgiExtension(ext))
+					return &_routes[i];
+			}
+			segStart = segEnd;
+		}
+	}
+	return NULL;
 }
 
 

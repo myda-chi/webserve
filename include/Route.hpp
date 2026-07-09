@@ -16,6 +16,8 @@ private:
 	int								_redirectCode;
 	std::string						_uploadPath;
 	std::map<std::string, std::string>	_cgiExtensions;
+	size_t							_clientMaxBodySize;
+	bool							_hasClientMaxBodySize;
 
 public:
 	// Orthodox Canonical Form
@@ -34,6 +36,7 @@ public:
 	void		setRedirectCode(int code);
 	void		setUploadPath(const std::string& path);
 	void		addCgiExtension(const std::string& ext, const std::string& handler);
+	void		setClientMaxBodySize(size_t size);
 
 	// Getters
 	const std::string&						getPath() const;
@@ -44,6 +47,8 @@ public:
 	const std::string&						getRedirect() const;
 	int										getRedirectCode() const;
 	const std::string&						getUploadPath() const;
+	bool									hasClientMaxBodySize() const;
+	size_t									getClientMaxBodySize() const;
 
 	// Utility methods
 	// isMethodAllowed: an empty allowed_methods list means every method is

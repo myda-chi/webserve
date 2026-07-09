@@ -47,6 +47,7 @@ public:
 	// Longest-prefix match over the configured location blocks ("/uploads"
 	// beats "/" for /uploads/x). NULL when no route matches.
 	Route*			matchRoute(const std::string& path);
+	Route*			matchCgiRoute(const std::string& path);
 };
 
 #endif

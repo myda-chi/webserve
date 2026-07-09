@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <limits.h>
 
 namespace {
 	static std::string toString(size_t value) {
@@ -61,11 +62,6 @@ namespace {
 			out += c;
 		}
 		return out;
-	}
-
-	static bool fileExists(const std::string& path) {
-		struct stat st;
-		return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
 	}
 }
 
@@ -129,6 +125,11 @@ CgiHandler::~CgiHandler() {
 bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 	_scriptPath = scriptPath;
 	_cgiExecutable = getCgiExecutablePath(extensionWithDot(scriptPath), route);
+	if (!_cgiExecutable.empty() && _cgiExecutable[0] != '/') {
+		char resolved[PATH_MAX];
+		if (::realpath(_cgiExecutable.c_str(), resolved) != NULL)
+			_cgiExecutable = resolved;
+	}
 	_output.clear();
 	_exitStatus = 0;
 	_pid = -1;
@@ -141,7 +142,7 @@ bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 	_input = _request.getBody();
 	_startTime = std::time(NULL);
 
-	if (_cgiExecutable.empty() || !fileExists(_scriptPath)) {
+	if (_cgiExecutable.empty()) {
 		_response.setStatusCode(404);
 		_response.setContentType("text/html");
 		_response.setBody("<html><body><h1>404 Not Found</h1></body></html>");
