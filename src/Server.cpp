@@ -196,20 +196,22 @@ void Server::setupListenSockets() {
 
 		Socket socket(host, port);
 		if (!socket.create()) {
-			Logger::getInstance()->warning("Failed to create socket for " + host);
-			continue;
+			std::ostringstream oss;
+			oss << "Failed to create socket for " << host << ":" << port;
+			throw std::runtime_error(oss.str());
 		}
 		if (!socket.bind()) {
 			std::ostringstream oss;
-			oss << "Failed to bind " << host << ":" << port;
-			Logger::getInstance()->warning(oss.str());
+			oss << "Failed to bind " << host << ":" << port
+				<< " (" << std::strerror(errno) << ")";
 			socket.close();
-			continue;
+			throw std::runtime_error(oss.str());
 		}
 		if (!socket.listen(256)) {
-			Logger::getInstance()->warning("Failed to listen on configured socket");
+			std::ostringstream oss;
+			oss << "Failed to listen on " << host << ":" << port;
 			socket.close();
-			continue;
+			throw std::runtime_error(oss.str());
 		}
 
 		_listenSockets.push_back(socket);
